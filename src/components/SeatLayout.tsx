@@ -28,6 +28,8 @@ export interface Seat {
 export interface Bus {
   id?: string | number;
   fare?: number;
+  fare_per_km: number;
+total_distance_km: number;
 
   boarding_city?: string;
   dropping_city?: string;
@@ -105,20 +107,29 @@ export default function SeatLayout({
 
   // Dynamic Fare Calculation per Seat
   const getSeatPrice = (seatNumber: string): number => {
-    if (seatNumber.startsWith("L-S")) {
-      return bus?.lower_single_fare || 0;
-    }
-    if (seatNumber.startsWith("L-D")) {
-      return bus?.lower_double_fare || 0;
-    }
-    if (seatNumber.startsWith("U-S")) {
-      return bus?.upper_single_fare || 0;
-    }
-    if (seatNumber.startsWith("U-D")) {
-      return bus?.upper_double_fare || 0;
-    }
-    return 0;
-  };
+  const farePerKm = Number(bus?.fare_per_km || 0);
+  const distance = Number(bus?.total_distance_km || 0);
+
+  const baseFare = farePerKm * distance;
+
+  if (seatNumber.startsWith("U-D")) {
+    return Math.round(baseFare * 1.00);
+  }
+
+  if (seatNumber.startsWith("U-S")) {
+    return Math.round(baseFare * 1.10);
+  }
+
+  if (seatNumber.startsWith("L-D")) {
+    return Math.round(baseFare * 1.20);
+  }
+
+  if (seatNumber.startsWith("L-S")) {
+    return Math.round(baseFare * 1.30);
+  }
+
+  return Math.round(baseFare);
+};
 
   // Categorize seats
   const femaleSeats = safeSeats

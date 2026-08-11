@@ -4,4 +4,6 @@ export interface Bus {
   type: string;
   seats: number;
   price: number;
+  fare_per_km?: number;
+total_distance_km?: number;
 }

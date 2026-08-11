@@ -17,18 +17,14 @@ import {
 } from "lucide-react";
 
 export interface BusData {
-  arrival_time: string;
   id: string | number;
   bus_name: string;
   registration_number: string;
   source: string;
   destination: string;
   departure_time: string;
-  pickup_time: string;
-  lower_single_fare: number;
-  lower_double_fare: number;
-  upper_single_fare: number;
-  upper_double_fare: number;
+  arrival_time: string;
+  pickup_time?: string;
   fare_per_km: number;
   total_distance_km: number;
   created_at?: string;
@@ -78,10 +74,6 @@ export default function BusManagement() {
     destination: "",
     departure_time: "",
     pickup_time: "",
-    lower_single_fare: "",
-    lower_double_fare: "",
-    upper_single_fare: "",
-    upper_double_fare: "",
     fare_per_km: "",
     total_distance_km: "",
   });
@@ -98,30 +90,23 @@ export default function BusManagement() {
       if (fetchError) throw fetchError;
       setBuses(data || []);
     } catch (err: any) {
-      console.error("FULL ERROR:", JSON.stringify(err, null, 2));
-      console.error(err);
-
+      console.error("FULL ERROR:", err);
       setError(
         err?.message ||
         err?.error_description ||
         "Failed to load buses."
       );
-    } finally {
+    } fontally: {
       setLoading(false);
     }
   };
 
- const fetchCities = async () => {
-  const response = await supabase
-    .from("cities")
-    .select("*");
-
-  console.log("FULL RESPONSE:", response);
-
-  if (!response.error) {
-    setCities(response.data || []);
-  }
-};
+  const fetchCities = async () => {
+    const response = await supabase.from("cities").select("*");
+    if (!response.error) {
+      setCities(response.data || []);
+    }
+  };
 
   useEffect(() => {
     fetchBuses();
@@ -137,29 +122,23 @@ export default function BusManagement() {
 
   const handleAddBus = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     setIsSubmitting(true);
     setError(null);
 
     try {
+      const arrivalVal = formData.arrival_time || formData.pickup_time || "";
+
       const payload = {
-        
         bus_name: formData.bus_name.trim(),
         registration_number: formData.registration_number.trim(),
         source: formData.source.trim(),
         destination: formData.destination.trim(),
-        arrival_time: formData.arrival_time || null,
         departure_time: formData.departure_time,
-        lower_single_fare: Number(formData.lower_single_fare) || 0,
-        lower_double_fare: Number(formData.lower_double_fare) || 0,
-        upper_single_fare: Number(formData.upper_single_fare) || 0,
-        upper_double_fare: Number(formData.upper_double_fare) || 0,
+        arrival_time: arrivalVal,
+        pickup_time: arrivalVal,
         fare_per_km: Number(formData.fare_per_km) || 0,
         total_distance_km: Number(formData.total_distance_km) || 0,
       };
-
-      console.log("FORM DATA =", formData);
-console.log("PAYLOAD =", payload);
 
       const { data, error: insertError } = await supabase
         .from("buses")
@@ -183,7 +162,7 @@ console.log("PAYLOAD =", payload);
             bus_id: newBus.id,
             city_name: newBus.destination,
             distance_from_source: newBus.total_distance_km || 0,
-            pickup_time: newBus.pickup_time,
+            pickup_time: newBus.arrival_time || newBus.pickup_time,
           },
         ]);
 
@@ -209,16 +188,12 @@ console.log("PAYLOAD =", payload);
 
     setFormData({
       bus_name: bus.bus_name,
-      arrival_time: bus.arrival_time || "",
       registration_number: bus.registration_number || "",
       source: bus.source,
       destination: bus.destination,
       departure_time: bus.departure_time,
-      pickup_time: bus.pickup_time,
-      lower_single_fare: String(bus.lower_single_fare),
-      lower_double_fare: String(bus.lower_double_fare),
-      upper_single_fare: String(bus.upper_single_fare),
-      upper_double_fare: String(bus.upper_double_fare),
+      arrival_time: bus.arrival_time || bus.pickup_time || "",
+      pickup_time: bus.pickup_time || bus.arrival_time || "",
       fare_per_km: String(bus.fare_per_km),
       total_distance_km: String(bus.total_distance_km),
     });
@@ -228,42 +203,36 @@ console.log("PAYLOAD =", payload);
 
   const handleUpdateBus = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!editingBus) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
+      const arrivalVal = formData.arrival_time || formData.pickup_time || "";
+
       const payload = {
-        bus_name: formData.bus_name,
-        registration_number: formData.registration_number,
-        source: formData.source,
-        destination: formData.destination,
+        bus_name: formData.bus_name.trim(),
+        registration_number: formData.registration_number.trim(),
+        source: formData.source.trim(),
+        destination: formData.destination.trim(),
         departure_time: formData.departure_time,
-        pickup_time: formData.pickup_time,
-        lower_single_fare: Number(formData.lower_single_fare),
-        lower_double_fare: Number(formData.lower_double_fare),
-        upper_single_fare: Number(formData.upper_single_fare),
-        upper_double_fare: Number(formData.upper_double_fare),
-        fare_per_km: Number(formData.fare_per_km),
-        total_distance_km: Number(formData.total_distance_km),
+        arrival_time: arrivalVal,
+        pickup_time: arrivalVal,
+        fare_per_km: Number(formData.fare_per_km) || 0,
+        total_distance_km: Number(formData.total_distance_km) || 0,
       };
 
-      const { data, error } = await supabase
-  .from("buses")
-  .update(payload)
-  .eq("id", editingBus.id)
-  .select();
-
-console.log("UPDATED DATA:", data);
-console.log("UPDATE ERROR:", error);
+      const { error } = await supabase
+        .from("buses")
+        .update(payload)
+        .eq("id", editingBus.id);
 
       if (error) throw error;
 
-      fetchBuses();
+      await fetchBuses();
 
-      setSuccessMessage("Bus updated successfully");
+      setSuccessMessage("Bus updated successfully!");
       setIsEditModalOpen(false);
       resetFormData();
       setTimeout(() => setSuccessMessage(null), 4000);
@@ -308,10 +277,6 @@ console.log("UPDATE ERROR:", error);
       destination: "",
       departure_time: "",
       pickup_time: "",
-      lower_single_fare: "",
-      lower_double_fare: "",
-      upper_single_fare: "",
-      upper_double_fare: "",
       fare_per_km: "",
       total_distance_km: "",
     });
@@ -355,11 +320,9 @@ console.log("UPDATE ERROR:", error);
         distance_from_source: Number(newStopData.distance_from_source) || 0,
         pickup_time: newStopData.pickup_time,
       };
-      console.log("FORM DATA =", formData);
-console.log("PAYLOAD =", payload);
+
       const { data, error: stopInsertError } = await supabase
         .from("pickup_points")
-        
         .insert([payload])
         .select();
 
@@ -397,7 +360,7 @@ console.log("PAYLOAD =", payload);
       setError(err.message || "Failed to delete route stop.");
     }
   };
-  console.log("Cities:", cities);
+
   return (
     <div className="bg-slate-50 min-h-screen py-10 px-4 sm:px-6 text-slate-800 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -507,24 +470,8 @@ console.log("PAYLOAD =", payload);
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Clock size={14} className="text-emerald-500" />
-                      <span><strong>Arr:</strong> {bus.pickup_time}</span>
+                      <span><strong>Arr:</strong> {bus.arrival_time || bus.pickup_time}</span>
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                    <span className="text-slate-400 uppercase tracking-wider text-[10px] mr-1">Fares:</span>
-                    <span className="bg-white px-2 py-1 rounded border border-slate-200">
-                      Lower Single: <strong className="text-slate-900">₹{bus.lower_single_fare}</strong>
-                    </span>
-                    <span className="bg-white px-2 py-1 rounded border border-slate-200">
-                      Lower Double: <strong className="text-slate-900">₹{bus.lower_double_fare}</strong>
-                    </span>
-                    <span className="bg-white px-2 py-1 rounded border border-slate-200">
-                      Upper Single: <strong className="text-slate-900">₹{bus.upper_single_fare}</strong>
-                    </span>
-                    <span className="bg-white px-2 py-1 rounded border border-slate-200">
-                      Upper Double: <strong className="text-slate-900">₹{bus.upper_double_fare}</strong>
-                    </span>
                   </div>
                 </div>
 
@@ -570,7 +517,7 @@ console.log("PAYLOAD =", payload);
       {/* ADD BUS MODAL */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh]">
             <button
               type="button"
               disabled={isSubmitting}
@@ -603,7 +550,7 @@ console.log("PAYLOAD =", payload);
                     placeholder="e.g. Royal Travels Express"
                     value={formData.bus_name}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
 
@@ -618,7 +565,7 @@ console.log("PAYLOAD =", payload);
                     placeholder="e.g. KA-01-F-1234"
                     value={formData.registration_number}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
               </div>
@@ -633,7 +580,7 @@ console.log("PAYLOAD =", payload);
                     required
                     value={formData.source}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   >
                     <option value="">Select City</option>
                     {cities.map((city) => (
@@ -653,7 +600,7 @@ console.log("PAYLOAD =", payload);
                     required
                     value={formData.destination}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   >
                     <option value="">Select City</option>
                     {cities.map((city) => (
@@ -674,9 +621,9 @@ console.log("PAYLOAD =", payload);
                     type="time"
                     required
                     name="departure_time"
-                    value={formData.departure_time || ""}
+                    value={formData.departure_time}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
 
@@ -687,19 +634,12 @@ console.log("PAYLOAD =", payload);
                   <input
                     type="time"
                     required
-                    name="pickup_time"
-                    value={formData.pickup_time}
+                    name="arrival_time"
+                    value={formData.arrival_time}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
-              </div>
-
-              {/* Distance & Rate Fields */}
-              <div className="pt-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 block border-b border-slate-100 pb-1">
-                  Distance & Dynamic Fare Rate
-                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -715,7 +655,7 @@ console.log("PAYLOAD =", payload);
                     placeholder="1.5"
                     value={formData.fare_per_km}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
 
@@ -730,101 +670,26 @@ console.log("PAYLOAD =", payload);
                     placeholder="700"
                     value={formData.total_distance_km}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="pt-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 block border-b border-slate-100 pb-1">
-                  Base Seat Pricing (₹)
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Lower Single
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="lower_single_fare"
-                    placeholder="800"
-                    value={formData.lower_single_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Lower Double
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="lower_double_fare"
-                    placeholder="700"
-                    value={formData.lower_double_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Upper Single
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="upper_single_fare"
-                    placeholder="750"
-                    value={formData.upper_single_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Upper Double
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="upper_double_fare"
-                    placeholder="650"
-                    value={formData.upper_double_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 sticky bottom-0 bg-white py-2">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Saving Bus...
-                    </>
-                  ) : (
-                    "Save & Add Bus"
-                  )}
+                  {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : "Save & Add Bus"}
                 </button>
               </div>
             </form>
@@ -835,7 +700,7 @@ console.log("PAYLOAD =", payload);
       {/* EDIT BUS MODAL */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh]">
             <button
               type="button"
               disabled={isSubmitting}
@@ -867,7 +732,7 @@ console.log("PAYLOAD =", payload);
                     name="bus_name"
                     value={formData.bus_name}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
 
@@ -879,9 +744,9 @@ console.log("PAYLOAD =", payload);
                     type="text"
                     required
                     name="registration_number"
-                    value={formData.registration_number || ""}
+                    value={formData.registration_number}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
               </div>
@@ -892,24 +757,19 @@ console.log("PAYLOAD =", payload);
                     Source (From) *
                   </label>
                   <select
-  name="source"
-  value={formData.source || ""}
-  onChange={(e) =>
-    setFormData((prev) => ({
-      ...prev,
-      source: e.target.value,
-    }))
-  }
-  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm"
->
-  <option value="">Select City</option>
-
-  {cities.map((city) => (
-    <option key={city.id} value={city.city_name}>
-      {city.city_name}
-    </option>
-  ))}
-</select>
+                    name="source"
+                    required
+                    value={formData.source}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                  >
+                    <option value="">Select City</option>
+                    {cities.map((city) => (
+                      <option key={city.id} value={city.city_name}>
+                        {city.city_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -917,24 +777,19 @@ console.log("PAYLOAD =", payload);
                     Destination (To) *
                   </label>
                   <select
-  name="destination"
-  value={formData.destination || ""}
-  onChange={(e) =>
-    setFormData((prev) => ({
-      ...prev,
-      destination: e.target.value,
-    }))
-  }
-  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm"
->
-  <option value="">Select City</option>
-
-  {cities.map((city) => (
-    <option key={city.id} value={city.city_name}>
-      {city.city_name}
-    </option>
-  ))}
-</select>
+                    name="destination"
+                    required
+                    value={formData.destination}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                  >
+                    <option value="">Select City</option>
+                    {cities.map((city) => (
+                      <option key={city.id} value={city.city_name}>
+                        {city.city_name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -949,46 +804,23 @@ console.log("PAYLOAD =", payload);
                     name="departure_time"
                     value={formData.departure_time}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
-                <div>
-  <label className="block text-sm font-medium">
-    Arrival Time
-  </label>
-
-  <input
-    type="time"
-    value={formData.arrival_time}
-    onChange={(e) =>
-      setFormData({
-        ...formData,
-        arrival_time: e.target.value,
-      })
-    }
-    className="w-full border rounded-lg px-3 py-2"
-  />
-</div>
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Pickup Time *
+                    Arrival Time *
                   </label>
                   <input
                     type="time"
                     required
-                    name="pickup_time"
-                    value={formData.pickup_time|| ""}
+                    name="arrival_time"
+                    value={formData.arrival_time}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
-              </div>
-
-              <div className="pt-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 block border-b border-slate-100 pb-1">
-                  Distance & Dynamic Fare Rate
-                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1003,7 +835,7 @@ console.log("PAYLOAD =", payload);
                     name="fare_per_km"
                     value={formData.fare_per_km}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
 
@@ -1017,97 +849,26 @@ console.log("PAYLOAD =", payload);
                     name="total_distance_km"
                     value={formData.total_distance_km}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
                   />
                 </div>
               </div>
 
-              <div className="pt-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 block border-b border-slate-100 pb-1">
-                  Base Seat Pricing (₹)
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Lower Single
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="lower_single_fare"
-                    value={formData.lower_single_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Lower Double
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="lower_double_fare"
-                    value={formData.lower_double_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Upper Single
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="upper_single_fare"
-                    value={formData.upper_single_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Upper Double
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    name="upper_double_fare"
-                    value={formData.upper_double_fare}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 sticky bottom-0 bg-white py-2">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
                 <button
                   type="button"
                   disabled={isSubmitting}
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Updating Bus...
-                    </>
-                  ) : (
-                    "Update Bus"
-                  )}
+                  {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : "Update Bus"}
                 </button>
               </div>
             </form>
@@ -1115,14 +876,14 @@ console.log("PAYLOAD =", payload);
         </div>
       )}
 
-      {/* STOP MANAGEMENT MODAL */}
+      {/* MANAGE ROUTE STOPS MODAL */}
       {isStopsModalOpen && selectedBusForStops && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative flex flex-col max-h-[90vh]">
             <button
               type="button"
               onClick={() => setIsStopsModalOpen(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-100 transition-colors z-10"
             >
               <X size={20} />
             </button>
@@ -1133,16 +894,16 @@ console.log("PAYLOAD =", payload);
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">
-                  Manage Route Stops
+                  Manage Route Stops ({selectedBusForStops.bus_name})
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {selectedBusForStops.bus_name} ({selectedBusForStops.source} → {selectedBusForStops.destination})
+                  {selectedBusForStops.source} → {selectedBusForStops.destination}
                 </p>
               </div>
             </div>
 
             {/* Add Stop Form */}
-            <form onSubmit={handleAddStop} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-4 space-y-3">
+            <form onSubmit={handleAddStop} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 mb-4 space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
                 Add Intermediate Stop
               </span>
@@ -1150,10 +911,8 @@ console.log("PAYLOAD =", payload);
                 <select
                   required
                   value={newStopData.city_name}
-                  onChange={(e) =>
-                    setNewStopData((prev) => ({ ...prev, city_name: e.target.value }))
-                  }
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
+                  onChange={(e) => setNewStopData({ ...newStopData, city_name: e.target.value })}
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
                 >
                   <option value="">Select City</option>
                   {cities.map((city) => (
@@ -1166,28 +925,18 @@ console.log("PAYLOAD =", payload);
                 <input
                   type="number"
                   required
-                  placeholder="Dist from source (KM)"
+                  placeholder="Dist from Source (KM)"
                   value={newStopData.distance_from_source}
-                  onChange={(e) =>
-                    setNewStopData((prev) => ({
-                      ...prev,
-                      distance_from_source: e.target.value,
-                    }))
-                  }
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
+                  onChange={(e) => setNewStopData({ ...newStopData, distance_from_source: e.target.value })}
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
                 />
 
                 <input
                   type="time"
                   required
                   value={newStopData.pickup_time}
-                  onChange={(e) =>
-                    setNewStopData((prev) => ({
-                      ...prev,
-                      pickup_time: e.target.value,
-                    }))
-                  }
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
+                  onChange={(e) => setNewStopData({ ...newStopData, pickup_time: e.target.value })}
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
                 />
               </div>
 
@@ -1195,13 +944,9 @@ console.log("PAYLOAD =", payload);
                 <button
                   type="submit"
                   disabled={isAddingStop}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
-                  {isAddingStop ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Plus size={14} />
-                  )}
+                  {isAddingStop ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                   Add Stop
                 </button>
               </div>
@@ -1210,39 +955,32 @@ console.log("PAYLOAD =", payload);
             {/* Stops List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {loadingStops ? (
-                <div className="py-8 text-center text-slate-400 flex flex-col items-center gap-2">
-                  <Loader2 size={24} className="animate-spin text-indigo-600" />
-                  <span className="text-xs">Loading stops...</span>
+                <div className="flex justify-center py-6 text-slate-400">
+                  <Loader2 size={24} className="animate-spin" />
                 </div>
               ) : stops.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">
-                  No intermediate stops added yet.
-                </p>
+                <p className="text-center text-xs text-slate-400 py-6">No route stops configured yet.</p>
               ) : (
                 stops.map((stop) => (
                   <div
                     key={stop.id}
-                    className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                    className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-xs"
                   >
-                    <div className="flex items-center gap-3">
-                      <MapPin size={16} className="text-indigo-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-bold text-slate-900">{stop.city_name}</span>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
-                          <span>{stop.distance_from_source} KM</span>
-                          <span>•</span>
-                          <span>Pickup: {stop.pickup_time}</span>
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-indigo-600" />
+                      <span className="font-bold text-slate-900">{stop.city_name}</span>
+                      <span className="text-slate-400">• {stop.distance_from_source} KM</span>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => stop.id && handleDeleteStop(stop.id)}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-slate-600">{stop.pickup_time}</span>
+                      <button
+                        type="button"
+                        onClick={() => stop.id && handleDeleteStop(stop.id)}
+                        className="text-rose-600 hover:text-rose-800 p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export interface BusData {
+  fare_per_km?: number;
+total_distance_km?: number;
   id: string | number;
   bus_name?: string;
   bus_type?: string;
@@ -75,19 +77,14 @@ function calculateDuration(departure: string, arrival: string): string {
 }
 
 /** Safely derives the minimum available fare without returning Infinity */
+/** Calculate the starting fare from fare-per-km and total distance */
 function getStartingPrice(bus: BusData): number {
-  const fares = [
-    bus?.lower_single_fare,
-    bus?.lower_double_fare,
-    bus?.upper_single_fare,
-    bus?.upper_double_fare,
-    bus?.calculated_fare,
-    bus?.fare,
-    bus?.price,
-    bus?.ticket_price,
-  ].filter((f): f is number => typeof f === "number" && !isNaN(f) && f > 0);
+  const farePerKm = Number(bus?.fare_per_km ?? 0);
+  const distance = Number(bus?.total_distance_km ?? 0);
 
-  return fares.length > 0 ? Math.min(...fares) : 850;
+  const baseFare = farePerKm * distance;
+
+  return Math.round(baseFare);
 }
 
 export default function BusCard({ bus }: { bus: BusData }) {
