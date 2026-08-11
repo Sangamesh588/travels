@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import BusCard from "@/components/BusCard";
 
-export default function SearchPage() {
+function SearchContent() {
   const params = useSearchParams();
 
   const from = params.get("from")?.trim() || "";
@@ -27,17 +28,17 @@ export default function SearchPage() {
         console.log("DATE:", date);
 
         const response = await fetch(
-  `/api/search-buses?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-);
+          `/api/search-buses?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        );
 
-console.log("URL:", response.url);
-console.log("STATUS:", response.status);
+        console.log("URL:", response.url);
+        console.log("STATUS:", response.status);
 
-const data = await response.json();
+        const data = await response.json();
 
-console.log("SEARCH RESULTS =", data);
+        console.log("SEARCH RESULTS =", data);
 
-setBuses(Array.isArray(data) ? data : []);
+        setBuses(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Catch Error:", err);
         setBuses([]);
@@ -209,5 +210,21 @@ setBuses(Array.isArray(data) ? data : []);
         )}
       </main>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <p className="text-slate-500 font-medium text-sm">
+            Loading search results...
+          </p>
+        </div>
+      }
+    >
+      <SearchContent />
+    </Suspense>
   );
 }

@@ -63,7 +63,7 @@ export default function SchedulePage() {
     setFetching(false);
   };
 
-  // Fetch only active buses from Supabase
+  // Fetch active buses from Supabase
   const fetchBuses = async () => {
     try {
       const { data, error } = await supabase
@@ -80,9 +80,9 @@ export default function SchedulePage() {
 
   const fetchSchedules = async () => {
     try {
-      wait supabase
+      const { data, error } = await supabase
         .from("schedules")
-        .select("*,const { data, error } = a buses(bus_name, source, destination)")
+        .select("*, buses(bus_name, source, destination)")
         .order("journey_date", { ascending: true });
 
       if (error) throw error;
@@ -290,7 +290,7 @@ export default function SchedulePage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                className="w-full mt-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -370,7 +370,7 @@ export default function SchedulePage() {
                         <button
                           type="button"
                           onClick={() => deleteSchedule(s.id!)}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Delete schedule"
                         >
                           <Trash2 size={15} />
