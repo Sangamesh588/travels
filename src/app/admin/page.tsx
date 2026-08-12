@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+
 import {
   Bus,
   Ticket,
@@ -12,7 +14,6 @@ import {
   ShieldCheck,
   IndianRupee,
   Loader2,
-  Users,
 } from "lucide-react";
 
 export default function AdminDashboard() {
