@@ -14,6 +14,7 @@ import {
   Clock,
   Route,
   Pencil,
+  Calendar,
 } from "lucide-react";
 
 export interface BusData {
@@ -27,6 +28,7 @@ export interface BusData {
   pickup_time?: string;
   fare_per_km: number;
   total_distance_km: number;
+  journey_date?: string;
   created_at?: string;
 }
 
@@ -38,8 +40,16 @@ export interface StopData {
   pickup_time: string;
 }
 
+export interface CityData {
+  id: string | number;
+  city_name: string;
+}
+
 export default function BusManagement() {
-  const [cities, setCities] = useState<any[]>([]);
+  // Journey Dates State
+  const [journeyDates, setJourneyDates] = useState<string[]>([""]);
+
+  const [cities, setCities] = useState<CityData[]>([]);
   const [buses, setBuses] = useState<BusData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +88,23 @@ export default function BusManagement() {
     total_distance_km: "",
   });
 
+  // Helper Functions for Dynamic Journey Dates
+  const addDate = () => {
+    setJourneyDates([...journeyDates, ""]);
+  };
+
+  const updateDate = (index: number, value: string) => {
+    const updated = [...journeyDates];
+    updated[index] = value;
+    setJourneyDates(updated);
+  };
+
+  const removeDate = (index: number) => {
+    if (journeyDates.length === 1) return;
+    const updated = journeyDates.filter((_, i) => i !== index);
+    setJourneyDates(updated);
+  };
+
   const fetchBuses = async () => {
     setLoading(true);
     setError(null);
@@ -90,13 +117,9 @@ export default function BusManagement() {
       if (fetchError) throw fetchError;
       setBuses(data || []);
     } catch (err: any) {
-      console.error("FULL ERROR:", err);
-      setError(
-        err?.message ||
-        err?.error_description ||
-        "Failed to load buses."
-      );
-    } fontally: {
+      console.error("FETCH ERROR:", err);
+      setError(err?.message || "Failed to load buses.");
+    } finally {
       setLoading(false);
     }
   };
@@ -127,8 +150,11 @@ export default function BusManagement() {
 
     try {
       const arrivalVal = formData.arrival_time || formData.pickup_time || "";
+      const validDates = journeyDates.filter((d) => d.trim() !== "");
+      const datesToInsert = validDates.length > 0 ? validDates : [new Date().toISOString().split("T")[0]];
 
-      const payload = {
+      // Create entries for each provided journey date
+      const payloads = datesToInsert.map((date) => ({
         bus_name: formData.bus_name.trim(),
         registration_number: formData.registration_number.trim(),
         source: formData.source.trim(),
@@ -138,20 +164,19 @@ export default function BusManagement() {
         pickup_time: arrivalVal,
         fare_per_km: Number(formData.fare_per_km) || 0,
         total_distance_km: Number(formData.total_distance_km) || 0,
-      };
+        journey_date: date,
+      }));
 
       const { data, error: insertError } = await supabase
         .from("buses")
-        .insert([payload])
+        .insert(payloads)
         .select();
 
       if (insertError) throw insertError;
 
-      const newBus = data ? data[0] : null;
-
-      if (newBus) {
-        // Auto-add source and destination as initial pickup points
-        await supabase.from("pickup_points").insert([
+      if (data && data.length > 0) {
+        // Auto-add initial route endpoints for newly created buses
+        const stopsPayload = data.flatMap((newBus) => [
           {
             bus_id: newBus.id,
             city_name: newBus.source,
@@ -166,18 +191,19 @@ export default function BusManagement() {
           },
         ]);
 
-        setBuses((prev) => [newBus, ...prev]);
+        await supabase.from("pickup_points").insert(stopsPayload);
+        setBuses((prev) => [...data, ...prev]);
       } else {
         await fetchBuses();
       }
 
-      setSuccessMessage("Bus and initial route stops created successfully!");
+      setSuccessMessage("Bus route schedule(s) created successfully!");
       setIsAddModalOpen(false);
       resetFormData();
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
-      console.error("Error adding bus:", err);
-      setError(err.message || "Failed to add bus.");
+      console.error("ADD ERROR:", err);
+      setError(err?.message || "Failed to add bus.");
     } finally {
       setIsSubmitting(false);
     }
@@ -198,6 +224,7 @@ export default function BusManagement() {
       total_distance_km: String(bus.total_distance_km),
     });
 
+    setJourneyDates([bus.journey_date || ""]);
     setIsEditModalOpen(true);
   };
 
@@ -210,6 +237,7 @@ export default function BusManagement() {
 
     try {
       const arrivalVal = formData.arrival_time || formData.pickup_time || "";
+      const validDate = journeyDates[0]?.trim() || editingBus.journey_date;
 
       const payload = {
         bus_name: formData.bus_name.trim(),
@@ -221,14 +249,15 @@ export default function BusManagement() {
         pickup_time: arrivalVal,
         fare_per_km: Number(formData.fare_per_km) || 0,
         total_distance_km: Number(formData.total_distance_km) || 0,
+        journey_date: validDate,
       };
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from("buses")
         .update(payload)
         .eq("id", editingBus.id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       await fetchBuses();
 
@@ -237,37 +266,48 @@ export default function BusManagement() {
       resetFormData();
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
-      setError(err.message || "Failed to update bus.");
+      setError(err?.message || "Failed to update bus.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteBus = async (id: string | number) => {
-    if (!confirm("Are you sure you want to delete this bus?")) return;
+  if (!confirm("Delete this bus?")) return;
 
-    setDeletingId(id);
-    setError(null);
+  try {
+    await supabase
+      .from("bookings")
+      .delete()
+      .eq("bus_id", id);
 
-    try {
-      const { error: deleteError } = await supabase
-        .from("buses")
-        .delete()
-        .eq("id", id);
+    await supabase
+      .from("pickup_points")
+      .delete()
+      .eq("bus_id", id);
 
-      if (deleteError) throw deleteError;
+    await supabase
+      .from("seats")
+      .delete()
+      .eq("bus_id", id);
 
-      setBuses((prev) => prev.filter((bus) => bus.id !== id));
-      setSuccessMessage("Bus deleted successfully!");
-      setTimeout(() => setSuccessMessage(null), 4000);
-    } catch (err: any) {
-      console.error("Error deleting bus:", err);
-      setError(err.message || "Failed to delete bus.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
+    await supabase
+      .from("schedules")
+      .delete()
+      .eq("bus_id", id);
 
+    const { error } = await supabase
+      .from("buses")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    setBuses((prev) => prev.filter((bus) => bus.id !== id));
+  } catch (err) {
+    console.error(err);
+  }
+};
   const resetFormData = () => {
     setFormData({
       arrival_time: "",
@@ -280,9 +320,11 @@ export default function BusManagement() {
       fare_per_km: "",
       total_distance_km: "",
     });
+    setJourneyDates([""]);
+    setEditingBus(null);
   };
 
-  // --- STOP MANAGEMENT HANDLERS ---
+  // STOP MANAGEMENT HANDLERS
   const handleOpenStopsModal = async (bus: BusData) => {
     setSelectedBusForStops(bus);
     setIsStopsModalOpen(true);
@@ -302,7 +344,7 @@ export default function BusManagement() {
       setStops(data || []);
     } catch (err: any) {
       console.error("Error fetching stops:", err);
-      setError(err.message || "Failed to load route stops.");
+      setError(err?.message || "Failed to load route stops.");
     } finally {
       setLoadingStops(false);
     }
@@ -339,7 +381,7 @@ export default function BusManagement() {
       setNewStopData({ city_name: "", distance_from_source: "", pickup_time: "" });
     } catch (err: any) {
       console.error("Error adding stop:", err);
-      setError(err.message || "Failed to add route stop.");
+      setError(err?.message || "Failed to add route stop.");
     } finally {
       setIsAddingStop(false);
     }
@@ -357,7 +399,7 @@ export default function BusManagement() {
       setStops((prev) => prev.filter((s) => s.id !== stopId));
     } catch (err: any) {
       console.error("Error deleting stop:", err);
-      setError(err.message || "Failed to delete route stop.");
+      setError(err?.message || "Failed to delete route stop.");
     }
   };
 
@@ -443,8 +485,16 @@ export default function BusManagement() {
                       <Bus size={20} />
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-slate-900">{bus.bus_name}</h3>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-slate-900">{bus.bus_name}</h3>
+                        {bus.journey_date && (
+                          <span className="text-[11px] bg-slate-100 text-slate-700 font-medium px-2 py-0.5 rounded-full border border-slate-200 flex items-center gap-1">
+                            <Calendar size={11} className="text-indigo-600" />
+                            {bus.journey_date}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs font-mono font-semibold bg-slate-100 px-2 py-0.5 rounded text-slate-600 border border-slate-200">
                           {bus.registration_number}
                         </span>
@@ -642,6 +692,43 @@ export default function BusManagement() {
                 </div>
               </div>
 
+              {/* Dynamic Journey Dates UI */}
+              <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-indigo-600" />
+                  Journey Dates
+                </label>
+
+                {journeyDates.map((date, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => updateDate(index, e.target.value)}
+                      className="border border-slate-300 p-2 rounded-xl text-sm w-full bg-white outline-none focus:border-indigo-600"
+                    />
+
+                    {journeyDates.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDate(index)}
+                        className="bg-red-500 hover:bg-red-600 text-white px-3 rounded-xl transition-all cursor-pointer font-bold text-xs"
+                      >
+                        X
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addDate}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Plus size={14} /> Add Date
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -823,6 +910,18 @@ export default function BusManagement() {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Journey Date
+                </label>
+                <input
+                  type="date"
+                  value={journeyDates[0] || ""}
+                  onChange={(e) => updateDate(0, e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:border-indigo-600 outline-none"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
@@ -894,27 +993,29 @@ export default function BusManagement() {
               </div>
               <div>
                 <h3 className="text-xl font-bold text-slate-900">
-                  Manage Route Stops ({selectedBusForStops.bus_name})
+                  Manage Intermediate Stops
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {selectedBusForStops.source} → {selectedBusForStops.destination}
+                  {selectedBusForStops.bus_name} ({selectedBusForStops.source} → {selectedBusForStops.destination})
                 </p>
               </div>
             </div>
 
             {/* Add Stop Form */}
-            <form onSubmit={handleAddStop} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 mb-4 space-y-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+            <form onSubmit={handleAddStop} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-4 space-y-3">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                 Add Intermediate Stop
               </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <select
                   required
                   value={newStopData.city_name}
-                  onChange={(e) => setNewStopData({ ...newStopData, city_name: e.target.value })}
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
+                  onChange={(e) =>
+                    setNewStopData((prev) => ({ ...prev, city_name: e.target.value }))
+                  }
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
                 >
-                  <option value="">Select City</option>
+                  <option value="">Select Stop City</option>
                   {cities.map((city) => (
                     <option key={city.id} value={city.city_name}>
                       {city.city_name}
@@ -925,18 +1026,28 @@ export default function BusManagement() {
                 <input
                   type="number"
                   required
-                  placeholder="Dist from Source (KM)"
+                  placeholder="Dist. from source (KM)"
                   value={newStopData.distance_from_source}
-                  onChange={(e) => setNewStopData({ ...newStopData, distance_from_source: e.target.value })}
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
+                  onChange={(e) =>
+                    setNewStopData((prev) => ({
+                      ...prev,
+                      distance_from_source: e.target.value,
+                    }))
+                  }
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
                 />
 
                 <input
                   type="time"
                   required
                   value={newStopData.pickup_time}
-                  onChange={(e) => setNewStopData({ ...newStopData, pickup_time: e.target.value })}
-                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs focus:border-indigo-600 outline-none"
+                  onChange={(e) =>
+                    setNewStopData((prev) => ({
+                      ...prev,
+                      pickup_time: e.target.value,
+                    }))
+                  }
+                  className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-indigo-600"
                 />
               </div>
 
@@ -944,43 +1055,54 @@ export default function BusManagement() {
                 <button
                   type="submit"
                   disabled={isAddingStop}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                 >
                   {isAddingStop ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  Add Stop
+                  <span>Add Stop</span>
                 </button>
               </div>
             </form>
 
             {/* Stops List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                Route Points ({stops.length})
+              </span>
+
               {loadingStops ? (
-                <div className="flex justify-center py-6 text-slate-400">
-                  <Loader2 size={24} className="animate-spin" />
+                <div className="py-8 text-center text-slate-400">
+                  <Loader2 size={24} className="animate-spin mx-auto text-indigo-600 mb-2" />
+                  <span className="text-xs">Loading route stops...</span>
                 </div>
               ) : stops.length === 0 ? (
-                <p className="text-center text-xs text-slate-400 py-6">No route stops configured yet.</p>
+                <div className="py-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-2xl">
+                  No stops found for this bus route.
+                </div>
               ) : (
-                stops.map((stop) => (
+                stops.map((stop, index) => (
                   <div
-                    key={stop.id}
-                    className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-xs"
+                    key={stop.id || index}
+                    className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs"
                   >
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-indigo-600" />
-                      <span className="font-bold text-slate-900">{stop.city_name}</span>
-                      <span className="text-slate-400">• {stop.distance_from_source} KM</span>
-                    </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-mono text-slate-600">{stop.pickup_time}</span>
-                      <button
-                        type="button"
-                        onClick={() => stop.id && handleDeleteStop(stop.id)}
-                        className="text-rose-600 hover:text-rose-800 p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[11px]">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <strong className="text-slate-900 block text-sm">{stop.city_name}</strong>
+                        <span className="text-slate-500 text-[11px]">
+                          {stop.distance_from_source} KM from source • Time: {stop.pickup_time}
+                        </span>
+                      </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => stop.id && handleDeleteStop(stop.id)}
+                      className="text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 ))
               )}

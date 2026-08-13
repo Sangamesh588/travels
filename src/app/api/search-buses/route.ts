@@ -19,9 +19,27 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data: buses, error } = await supabase
-    .from("buses")
-    .select("*");
+  const date = req.nextUrl.searchParams.get("date");
+
+if (!date) {
+  return NextResponse.json(
+    { error: "Date required" },
+    { status: 400 }
+  );
+}
+
+const { data: schedules, error } = await supabase
+  .from("schedules")
+  .select(`
+    *,
+    buses (*)
+  `)
+  .eq("journey_date", date)
+  .eq("status", "active");
+
+  console.log("DATE =", date);
+console.log("ERROR =", error);
+console.log("SCHEDULES =", schedules);
 
   if (error) {
     return NextResponse.json(
@@ -31,9 +49,16 @@ export async function GET(req: NextRequest) {
   }
 
   const results: any[] = [];
+  console.log("SCHEDULES FOUND =", schedules);
 
-  for (const bus of buses || []) {
+for (const schedule of schedules || []) {
+  console.log("SCHEDULE =", schedule);
 
+  const bus = schedule.buses;
+
+  console.log("BUS =", bus);
+
+  if (!bus) continue;
   // Direct source -> destination match
   if (
     bus.source?.trim().toLowerCase() === from &&

@@ -1,11 +1,14 @@
 "use client";
-
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import SeatLayout, { BookingPayload } from "@/components/SeatLayout";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
 export default function BookingPage() {
+  const params = useParams();
+
+const busId = params.id;
   const [seats, setSeats] = useState<any[]>([]);
   const [bus, setBus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +38,7 @@ export default function BookingPage() {
       const { data: busData, error: busError } = await supabase
         .from("buses")
         .select("*")
-        .eq("id", 3)
+        .eq("id", busId)
         .single();
 
       if (busError) {

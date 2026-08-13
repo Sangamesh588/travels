@@ -28,8 +28,8 @@ function SearchContent() {
         console.log("DATE:", date);
 
         const response = await fetch(
-          `/api/search-buses?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-        );
+  `/api/search-buses?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${date}`
+);
 
         console.log("URL:", response.url);
         console.log("STATUS:", response.status);

@@ -1,5 +1,5 @@
 "use client";
-
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -111,9 +111,16 @@ export default function BusCard({ bus }: { bus: BusData }) {
 
   const fromCity = bus?.boarding_city || bus?.source || "";
   const toCity = bus?.dropping_city || bus?.destination || "";
+  const searchParams = useSearchParams();
+
+const selectedDate =
+  searchParams.get("date") || "";
+console.log("BUS ID =", bus.id);
+console.log("SELECTED DATE =", selectedDate);
 
   // Constructed URL cleanly on a single line
-  const bookingUrl = `/booking/${bus?.id}?from=${encodeURIComponent(fromCity)}&to=${encodeURIComponent(toCity)}`;
+  const bookingUrl =
+  `/booking/${bus?.id}?from=${encodeURIComponent(fromCity)}&to=${encodeURIComponent(toCity)}&date=${selectedDate}`;
 
   useEffect(() => {
     let isMounted = true;

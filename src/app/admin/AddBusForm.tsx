@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertCircle,
   CalendarDays,
+  Trash2,
 } from "lucide-react";
 
 export interface BusFormState {
@@ -48,6 +49,7 @@ const initialFormState: BusFormState = {
 
 export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) {
   const [form, setForm] = useState<BusFormState>(initialFormState);
+  const [journeyDates, setJourneyDates] = useState<string[]>([""]);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{
     type: "success" | "error";
@@ -58,15 +60,41 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleDateChange = (index: number, value: string) => {
+    const updatedDates = [...journeyDates];
+    updatedDates[index] = value;
+    setJourneyDates(updatedDates);
+
+    // Keep primary journey_date field in sync with the first date entry
+    if (index === 0) {
+      updateField("journey_date", value);
+    }
+  };
+
+  const addDateInput = () => {
+    setJourneyDates((prev) => [...prev, ""]);
+  };
+
+  const removeDateInput = (index: number) => {
+    if (journeyDates.length === 1) return;
+    const updatedDates = journeyDates.filter((_, i) => i !== index);
+    setJourneyDates(updatedDates);
+    if (index === 0 && updatedDates.length > 0) {
+      updateField("journey_date", updatedDates[0]);
+    }
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatusMsg(null);
+
+    const validDates = journeyDates.filter(Boolean);
 
     if (
       !form.bus_name ||
       !form.source ||
       !form.destination ||
-      !form.journey_date ||
+      validDates.length === 0 ||
       !form.departure_time ||
       !form.arrival_time
     ) {
@@ -85,6 +113,7 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
         .insert([
           {
             ...form,
+            journey_date: validDates[0],
             total_seats: Number(form.total_seats),
             fare: Number(form.fare),
             is_active: true,
@@ -93,15 +122,54 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+  console.log("BUS INSERT ERROR:", error);
+  alert(JSON.stringify(error));
+  return;
+}
+console.log("BUS DATA:", data);
+console.log("VALID DATES:", validDates);
+
+
+      const schedules = validDates.map((date) => ({
+        bus_id: data.id,
+        journey_date: date,
+        status: "active",
+      }));
+
+      console.log("VALID DATES =", validDates);
+console.log("SCHEDULES =", schedules);
+
+      console.log("SCHEDULES TO INSERT:", schedules);
+      
+
+      if (schedules.length > 0) {
+        const { data: scheduleData, error: scheduleError } =
+  await supabase
+    .from("schedules")
+    .insert(schedules)
+    .select();
+
+console.log("BUS DATA:", data);
+console.log("SCHEDULES:", schedules);
+console.log("SCHEDULE DATA:", scheduleData);
+console.log("SCHEDULE ERROR:", scheduleError);
+
+        if (scheduleError) {
+  console.log("SCHEDULE INSERT ERROR:", scheduleError);
+  alert(JSON.stringify(scheduleError));
+  return;
+}
+      }
 
       setStatusMsg({
         type: "success",
         text: `Bus "${data.bus_name}" added successfully!`,
       });
 
-      // Reset form
+      // Reset form and dates state
       setForm(initialFormState);
+      setJourneyDates([""]);
 
       if (onBusAdded) onBusAdded();
     } catch (error: any) {
@@ -272,8 +340,8 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
           </div>
         </div>
 
-        {/* Row 4: Departure Time, Arrival Time, Journey Date */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Row 4: Departure Time & Arrival Time */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">
               Departure Time <span className="text-rose-400">*</span>
@@ -303,24 +371,48 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
               />
             </div>
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">
-              Journey Date <span className="text-rose-400">*</span>
-            </label>
-            <div className="relative">
-              <Calendar size={16} className="absolute left-3.5 top-3.5 text-slate-500" />
-              <input
-                type="date"
-                value={form.journey_date}
-                onChange={(e) => updateField("journey_date", e.target.value)}
-                className="w-full pl-10 pr-2 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all [color-scheme:dark]"
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Row 5: Available Days Selection */}
+        {/* Row 5: Dynamic Journey Dates */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-300">
+              Journey Date(s) <span className="text-rose-400">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={addDateInput}
+              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+            >
+              <Plus size={14} /> Add Date
+            </button>
+          </div>
+
+          {journeyDates.map((date, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Calendar size={16} className="absolute left-3.5 top-3.5 text-slate-500" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => handleDateChange(index, e.target.value)}
+                  className="w-full pl-10 pr-2 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all [color-scheme:dark]"
+                />
+              </div>
+              {journeyDates.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeDateInput(index)}
+                  className="p-2.5 rounded-xl border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 transition-all"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Row 6: Available Days Selection */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-slate-300">
             Frequency / Operational Days
@@ -345,7 +437,7 @@ export default function AddBusForm({ onBusAdded }: { onBusAdded?: () => void }) 
         <button
           type="submit"
           disabled={loading}
-          className="w-full mt-4 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+          className="w-full mt-4 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
         >
           {loading ? (
             <>
